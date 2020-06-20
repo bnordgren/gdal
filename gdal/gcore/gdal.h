@@ -686,6 +686,7 @@ typedef struct
 void CPL_DLL CPL_STDCALL GDALInitGCPs( int, GDAL_GCP * );
 void CPL_DLL CPL_STDCALL GDALDeinitGCPs( int, GDAL_GCP * );
 GDAL_GCP CPL_DLL * CPL_STDCALL GDALDuplicateGCPs( int, const GDAL_GCP * );
+GDAL_GCP CPL_DLL * CPL_STDCALL GDALDuplicateAndFilterGCPs( int, const GDAL_GCP *, int *, double * );
 
 int CPL_DLL CPL_STDCALL
 GDALGCPsToGeoTransform( int nGCPCount, const GDAL_GCP *pasGCPs,

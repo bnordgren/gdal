@@ -1417,10 +1417,12 @@ GDALDatasetH GDALTranslate( const char *pszDest, GDALDatasetH hSrcDataset,
     else if( !psOptions->bNoGCP && GDALGetGCPCount( hSrcDataset ) > 0 )
     {
         const int nGCPs = GDALGetGCPCount(hSrcDataset);
+        int nFilteredGCPs = 0 ;
 
-        GDAL_GCP *pasGCPs = GDALDuplicateGCPs(nGCPs, GDALGetGCPs(hSrcDataset));
+        GDAL_GCP *pasGCPs = GDALDuplicateAndFilterGCPs(nGCPs, GDALGetGCPs(hSrcDataset),
+                                                       &nFilteredGCPs, psOptions->adfSrcWin);
 
-        for( int i = 0; i < nGCPs; i++ )
+        for( int i = 0; i < nFilteredGCPs; i++ )
         {
             pasGCPs[i].dfGCPPixel -= psOptions->adfSrcWin[0];
             pasGCPs[i].dfGCPLine  -= psOptions->adfSrcWin[1];
@@ -1430,10 +1432,10 @@ GDALDatasetH GDALTranslate( const char *pszDest, GDALDatasetH hSrcDataset,
                 nOYSize / static_cast<double>(psOptions->adfSrcWin[3]);
         }
 
-        poVDS->SetGCPs( nGCPs, pasGCPs,
+        poVDS->SetGCPs( nFilteredGCPs, pasGCPs,
                         GDALGetGCPProjection( hSrcDataset ) );
 
-        GDALDeinitGCPs( nGCPs, pasGCPs );
+        GDALDeinitGCPs( nFilteredGCPs, pasGCPs );
         CPLFree( pasGCPs );
     }
 

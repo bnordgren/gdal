@@ -1265,6 +1265,77 @@ GDAL_GCP * CPL_STDCALL GDALDuplicateGCPs( int nCount, const GDAL_GCP *pasGCPList
 
     return pasReturn;
 }
+/************************************************************************/
+/*                         GDALDuplicateAndFilterGCPs()                          */
+/************************************************************************/
+
+/** Duplicate an array of GCPs, filtering out those which do not intersect
+ *  the window specified in adfSrcWin
+ *
+ * The return must be freed with GDALDeinitGCPs() followed by CPLFree()
+ *
+ * @param nCount number of GCPs in pasGCPList
+ * @param pasGCPList array of GCPs of size nCount.
+ * #param nFilteredCount number of GCPs returned in the list.
+ * @param adfSrcWin xoff, yoff, xsize, ysize of the window of interest in
+ *         the source.
+ */
+GDAL_GCP CPL_DLL * CPL_STDCALL GDALDuplicateAndFilterGCPs( int             nCount, 
+                                                           const GDAL_GCP *pasGCPList, 
+                                                           int            *nFilteredCount,
+                                                           double         *adfSrcWin )
+
+{
+
+    *nFilteredCount = 0 ; 
+    double xmax = adfSrcWin[0] + adfSrcWin[2] ; 
+    double ymax = adfSrcWin[1] + adfSrcWin[3] ;
+    
+    /* count how many GCPs are actually to be saved... */
+    for( int iGCP = 0; iGCP < nCount; iGCP++ )
+    {
+        double x = pasGCPList[iGCP].dfGCPPixel ; 
+        double y = pasGCPList[iGCP].dfGCPLine ; 
+        
+        if( (x>=adfSrcWin[0]) && (x<=xmax) &&
+            (y>=adfSrcWin[1]) && (y<=ymax))
+            (*nFilteredCount) ++ ;
+    }
+
+    /* allocate space for returned GCPs */
+    GDAL_GCP *pasReturn = static_cast<GDAL_GCP *>(
+        CPLMalloc(sizeof(GDAL_GCP) * (*nFilteredCount)) );
+    GDALInitGCPs( *nFilteredCount, pasReturn );
+
+    /* duplicate only those GCPs which lie within the adfSrcWin window */
+    int iFilteredGCP = 0 ;
+    for( int iGCP = 0; iGCP < nCount; iGCP++ )
+    {
+    	  double x = pasGCPList[iGCP].dfGCPPixel ; 
+        double y = pasGCPList[iGCP].dfGCPLine ; 
+        
+        if( (x>=adfSrcWin[0]) && (x<=xmax) &&
+            (y>=adfSrcWin[1]) && (y<=ymax))
+        {
+            CPLFree( pasReturn[iFilteredGCP].pszId );
+            pasReturn[iFilteredGCP].pszId = CPLStrdup( pasGCPList[iGCP].pszId );
+
+            CPLFree( pasReturn[iFilteredGCP].pszInfo );
+            pasReturn[iFilteredGCP].pszInfo = CPLStrdup( pasGCPList[iGCP].pszInfo );
+
+            pasReturn[iFilteredGCP].dfGCPPixel = pasGCPList[iGCP].dfGCPPixel;
+            pasReturn[iFilteredGCP].dfGCPLine = pasGCPList[iGCP].dfGCPLine;
+            pasReturn[iFilteredGCP].dfGCPX = pasGCPList[iGCP].dfGCPX;
+            pasReturn[iFilteredGCP].dfGCPY = pasGCPList[iGCP].dfGCPY;
+            pasReturn[iFilteredGCP].dfGCPZ = pasGCPList[iGCP].dfGCPZ;
+            
+            iFilteredGCP++ ; 
+        }
+
+    }
+
+    return pasReturn;
+}
 
 /************************************************************************/
 /*                       GDALFindAssociatedFile()                       */
