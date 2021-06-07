@@ -46,6 +46,7 @@
 static const char szAlgNameInvDist[] = "invdist";
 static const char szAlgNameInvDistNearestNeighbor[] = "invdistnn";
 static const char szAlgNameAverage[] = "average";
+static const char szAlgNameRectSum[] = "rect_sum";
 static const char szAlgNameNearest[] = "nearest";
 static const char szAlgNameMinimum[] = "minimum";
 static const char szAlgNameMaximum[] = "maximum";
@@ -85,6 +86,11 @@ GDALGridInverseDistanceToAPowerNoSearch( const void *, GUInt32,
                                          void*  );
 CPLErr
 GDALGridMovingAverage( const void *, GUInt32,
+                       const double *, const double *, const double *,
+                       double, double, double *,
+                       void*  );
+CPLErr
+GDALGridRectangularSum( const void *, GUInt32,
                        const double *, const double *, const double *,
                        double, double, double *,
                        void*  );

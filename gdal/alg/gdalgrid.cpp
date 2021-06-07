@@ -601,6 +601,114 @@ GDALGridMovingAverage( const void *poOptionsIn, GUInt32 nPoints,
 }
 
 /************************************************************************/
+/*                        GDALGridRectangularSum()                      */
+/************************************************************************/
+
+/**
+ * Sum of the input values in a rectangular space.
+ *
+ * The Rectangular Sum is a simple data summing algorithm. It uses a moving
+ * window of rectangular form to search values and totals all data points
+ * within the window. Search rectangle can be rotated by specified angle, the
+ * center of rectangle located at the grid node. Also the minimum number of data
+ * points to sum can be set, if there are not enough points in window, the
+ * grid node considered empty and will be filled with specified NODATA value.
+ *
+ * Mathematically it can be expressed with the formula:
+ *
+ * \f[
+ *      Z=\sum_{i=1}^n{Z_i}
+ * \f]
+ *
+ *  where
+ *  <ul>
+ *      <li> \f$Z\f$ is a resulting value at the grid node,
+ *      <li> \f$Z_i\f$ is a known value at point \f$i\f$,
+ *      <li> \f$n\f$ is a total number of points in search rectangle.
+ *  </ul>
+ *
+ * @param poOptionsIn Algorithm parameters. This should point to
+ * GDALGridMovingAverageOptions object. 
+ * @param nPoints Number of elements in input arrays.
+ * @param padfX Input array of X coordinates.
+ * @param padfY Input array of Y coordinates.
+ * @param padfZ Input array of Z values.
+ * @param dfXPoint X coordinate of the point to compute.
+ * @param dfYPoint Y coordinate of the point to compute.
+ * @param pdfValue Pointer to variable where the computed grid node value
+ * will be returned.
+ * @param hExtraParamsIn extra parameters (unused)
+ *
+ * @return CE_None on success or CE_Failure if something goes wrong.
+ */
+
+CPLErr
+GDALGridRectangularSum( const void *poOptionsIn, GUInt32 nPoints,
+                       const double *padfX, const double *padfY,
+                       const double *padfZ,
+                       double dfXPoint, double dfYPoint, double *pdfValue,
+                       CPL_UNUSED void * hExtraParamsIn )
+{
+    // TODO: For optimization purposes pre-computed parameters should be moved
+    // out of this routine to the calling function.
+
+    const GDALGridMovingAverageOptions * const poOptions =
+        static_cast<const GDALGridMovingAverageOptions *>(poOptionsIn);
+
+    // copy search rectangle parameters.
+    const double dfRadius1 = poOptions->dfRadius1 ;
+    const double dfRadius2 = poOptions->dfRadius2 ;
+
+    // Compute coefficients for coordinate system rotation.
+    const double dfAngle = TO_RADIANS * poOptions->dfAngle;
+    const bool bRotated = dfAngle != 0.0;
+
+    const double dfCoeff1 = bRotated ? cos(dfAngle) : 0.0;
+    const double dfCoeff2 = bRotated ? sin(dfAngle) : 0.0;
+
+    double dfAccumulator = 0.0;
+
+    GUInt32 n = 0;  // Used after for.
+
+    for( GUInt32 i = 0; i < nPoints; i++ )
+    {
+        double dfRX = padfX[i] - dfXPoint;
+        double dfRY = padfY[i] - dfYPoint;
+
+        if( bRotated )
+        {
+            const double dfRXRotated = dfRX * dfCoeff1 + dfRY * dfCoeff2;
+            const double dfRYRotated = dfRY * dfCoeff1 - dfRX * dfCoeff2;
+
+            dfRX = dfRXRotated;
+            dfRY = dfRYRotated;
+        }
+
+        // absolute value of deltas
+        dfRX = std::abs(dfRX) ; 
+        dfRY = std::abs(dfRY) ;
+
+        // Is this point located inside the search rectangle?
+        if( (dfRX <= dfRadius1) && (dfRY <= dfRadius2) )
+        {
+            dfAccumulator += padfZ[i];
+            n++;
+        }
+    }
+
+    if( n < poOptions->nMinPoints || n == 0 )
+    {
+        *pdfValue = poOptions->dfNoDataValue;
+    }
+    else
+    {
+        *pdfValue = dfAccumulator ;
+    }
+
+    return CE_None;
+}
+
+/************************************************************************/
 /*                        GDALGridNearestNeighbor()                     */
 /************************************************************************/
 
@@ -1883,6 +1991,16 @@ GDALGridContextCreate( GDALGridAlgorithm eAlgorithm, const void *poOptions,
             pfnGDALGridMethod = GDALGridMovingAverage;
             break;
         }
+        case GGA_RectangularSum:
+        {
+            poOptionsNew = CPLMalloc(sizeof(GDALGridMovingAverageOptions));
+            memcpy(poOptionsNew,
+                   poOptions,
+                   sizeof(GDALGridMovingAverageOptions));
+
+            pfnGDALGridMethod = GDALGridRectangularSum;
+            break;
+        }
         case GGA_NearestNeighbor:
         {
             poOptionsNew = CPLMalloc(sizeof(GDALGridNearestNeighborOptions));
@@ -2480,6 +2598,10 @@ CPLErr ParseAlgorithmAndOptions( const char *pszAlgorithm,
     {
         *peAlgorithm = GGA_MovingAverage;
     }
+    else if( EQUAL(papszParams[0], szAlgNameRectSum) )
+    {
+        *peAlgorithm = GGA_RectangularSum;
+    }
     else if( EQUAL(papszParams[0], szAlgNameNearest) )
     {
         *peAlgorithm = GGA_NearestNeighbor;
@@ -2599,6 +2721,32 @@ CPLErr ParseAlgorithmAndOptions( const char *pszAlgorithm,
             break;
         }
         case GGA_MovingAverage:
+        {
+            *ppOptions =
+                CPLMalloc( sizeof(GDALGridMovingAverageOptions) );
+
+            GDALGridMovingAverageOptions * const poAverageOpts =
+                static_cast<GDALGridMovingAverageOptions *>(*ppOptions);
+
+            const char *pszValue = CSLFetchNameValue( papszParams, "radius1" );
+            poAverageOpts->dfRadius1 = pszValue ? CPLAtofM(pszValue) : 0.0;
+
+            pszValue = CSLFetchNameValue( papszParams, "radius2" );
+            poAverageOpts->dfRadius2 = pszValue ? CPLAtofM(pszValue) : 0.0;
+
+            pszValue = CSLFetchNameValue( papszParams, "angle" );
+            poAverageOpts->dfAngle = pszValue ? CPLAtofM(pszValue) : 0.0;
+
+            pszValue = CSLFetchNameValue( papszParams, "min_points" );
+            poAverageOpts->nMinPoints = static_cast<GUInt32>(
+                pszValue ? CPLAtofM(pszValue) : 0);
+
+            pszValue = CSLFetchNameValue( papszParams, "nodata" );
+            poAverageOpts->dfNoDataValue = pszValue ? CPLAtofM(pszValue) : 0.0;
+
+            break;
+        }
+        case GGA_RectangularSum:
         {
             *ppOptions =
                 CPLMalloc( sizeof(GDALGridMovingAverageOptions) );

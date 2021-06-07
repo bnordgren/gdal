@@ -448,7 +448,8 @@ typedef enum {
   /*! Linear interpolation (from Delaunay triangulation. Since GDAL 2.1 */
                                         GGA_Linear = 10,
   /*! Inverse distance to a power with nearest neighbor search for max points */
-                                        GGA_InverseDistanceToAPowerNearestNeighbor = 11
+                                        GGA_InverseDistanceToAPowerNearestNeighbor = 11,
+  /*! Rectangular Sum */                GGA_RectangularSum = 12
 } GDALGridAlgorithm;
 
 /** Inverse distance to a power method control options */
